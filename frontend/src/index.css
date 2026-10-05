@@ -1393,3 +1393,109 @@ body {
 .text-green {
   color: var(--primary);
 }
+
+/* ==========================================================================
+   Voice Input & Speech-to-Text Controls
+   ========================================================================== */
+
+.voice-controls-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select-voice-lang {
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  color: var(--text-body);
+  outline: none;
+  cursor: pointer;
+}
+
+.pulse-mic {
+  animation: pulse-red 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse-red {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+/* ==========================================================================
+   Dynamic UPI Payment QR Code Card in Reminder Modal
+   ========================================================================== */
+
+.upi-qr-card {
+  margin: 14px 0;
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: var(--radius-md);
+}
+
+.upi-qr-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.upi-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.upi-input-inline {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upi-qr-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #ffffff;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-light);
+}
+
+.qr-image-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.qr-image {
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 4px;
+  background: #ffffff;
+}
+
+.qr-caption {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+.upi-details-col {
+  flex: 1;
+}

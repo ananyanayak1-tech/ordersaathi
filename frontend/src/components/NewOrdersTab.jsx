@@ -19,15 +19,79 @@ export default function NewOrdersTab({
   onSwitchToDashboard
 }) {
   const [extractError, setExtractError] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [speechLang, setSpeechLang] = useState('hi-IN');
+  const [speechError, setSpeechError] = useState('');
+  const [recognitionRef, setRecognitionRef] = useState(null);
+
+  const toggleVoiceRecording = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechError('Speech recognition is not supported in this browser. Please paste or type chat text.');
+      return;
+    }
+
+    if (isListening) {
+      if (recognitionRef) {
+        recognitionRef.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    setSpeechError('');
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = speechLang;
+      recognition.continuous = false;
+      recognition.interimResults = false;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+      };
+
+      recognition.onresult = (event) => {
+        let currentTranscript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          currentTranscript += event.results[i][0].transcript;
+        }
+        if (currentTranscript.trim()) {
+          setChatText((prev) => (prev ? prev + ' ' + currentTranscript.trim() : currentTranscript.trim()));
+        }
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Speech recognition error', event.error);
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          setSpeechError('Microphone access denied. Please allow mic permissions.');
+        } else if (event.error !== 'no-speech') {
+          setSpeechError(`Voice input issue: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      setRecognitionRef(recognition);
+      recognition.start();
+    } catch (err) {
+      setIsListening(false);
+      setSpeechError('Failed to start mic: ' + err.message);
+    }
+  };
 
   const handleLoadSample = () => {
     setChatText(SAMPLE_CHAT);
     setExtractError('');
+    setSpeechError('');
   };
 
   const handleClearChat = () => {
     setChatText('');
     setExtractError('');
+    setSpeechError('');
   };
 
   const handleExtractClick = async () => {
@@ -89,6 +153,26 @@ export default function NewOrdersTab({
             </p>
           </div>
           <div className="card-header-actions">
+            <div className="voice-controls-group">
+              <select
+                className="select-voice-lang"
+                value={speechLang}
+                onChange={(e) => setSpeechLang(e.target.value)}
+                disabled={isListening || isExtracting}
+                title="Select Speech Recognition Language"
+              >
+                <option value="hi-IN">🇮🇳 Hindi / Hinglish</option>
+                <option value="en-IN">🇬🇧 English</option>
+              </select>
+              <button
+                type="button"
+                className={`btn btn-sm ${isListening ? 'btn-danger pulse-mic' : 'btn-outline-primary'}`}
+                onClick={toggleVoiceRecording}
+                disabled={isExtracting}
+              >
+                <span>{isListening ? '🔴 Stop Listening' : '🎙️ Record Voice Note'}</span>
+              </button>
+            </div>
             <button
               type="button"
               className="btn btn-outline btn-sm"
@@ -101,7 +185,7 @@ export default function NewOrdersTab({
                 <line x1="16" y1="13" x2="8" y2="13"></line>
                 <line x1="16" y1="17" x2="8" y2="17"></line>
               </svg>
-              Load sample chat
+              Load sample
             </button>
             {chatText && (
               <button
@@ -115,6 +199,12 @@ export default function NewOrdersTab({
             )}
           </div>
         </div>
+
+        {speechError && (
+          <div className="alert alert-warning" style={{ margin: '0 20px 10px' }}>
+            <span>⚠️ {speechError}</span>
+          </div>
+        )}
 
         <div className="chat-textarea-wrapper">
           <textarea
@@ -275,6 +365,14 @@ export default function NewOrdersTab({
                                 value={order.customer_name || ''}
                                 onChange={(e) => handleUpdateOrder(idx, 'customer_name', e.target.value)}
                               />
+                              <input
+                                type="tel"
+                                className="table-input"
+                                style={{ marginTop: '4px', fontSize: '0.8rem' }}
+                                placeholder="Phone (e.g. 9876543210)"
+                                value={order.phone || ''}
+                                onChange={(e) => handleUpdateOrder(idx, 'phone', e.target.value)}
+                              />
                               {isFieldUncertain(order, 'customer_name') && (
                                 <span className="uncertain-tag" title="Name was not clearly specified in chat">Uncertain</span>
                               )}
@@ -292,6 +390,16 @@ export default function NewOrdersTab({
                                 onChange={(e) => handleUpdateOrder(idx, 'item', e.target.value)}
                                 required
                               />
+                              {order.price_warning && (
+                                <span className="warn-badge" style={{ marginTop: '4px', display: 'inline-block' }} title={`Catalog expected: ₹${order.expected_amount}`}>
+                                  ⚠️ Amount mismatch (Exp: ₹{order.expected_amount})
+                                </span>
+                              )}
+                              {order.item_not_in_catalog && (
+                                <span className="info-badge" style={{ marginTop: '4px', display: 'inline-block' }} title="Item not in catalog">
+                                  ℹ️ Not in catalog
+                                </span>
+                              )}
                               {isFieldUncertain(order, 'item') && (
                                 <span className="uncertain-tag" title="Item name was ambiguous">Uncertain</span>
                               )}

@@ -1,4 +1,4 @@
-﻿import React, { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Spinner from "./Spinner";
 import EmptyState from "./EmptyState";
 
@@ -18,6 +18,8 @@ export default function DashboardTab({
   const [searchQuery, setSearchQuery] = useState("");
   const [activeReminderOrderId, setActiveReminderOrderId] = useState(null);
   const [activeView, setActiveView] = useState("orders"); // "orders" | "prep" | "balances"
+  const [sellerUpiId, setSellerUpiId] = useState("shopkeeper@upi");
+  const [includeUpiLink, setIncludeUpiLink] = useState(true);
 
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -102,7 +104,12 @@ export default function DashboardTab({
   // Build WhatsApp send link
   const buildWALink = (order, reminderText) => {
     const phone = order.phone ? order.phone.replace(/\D/g, "") : "";
-    const text = encodeURIComponent(reminderText || "");
+    let fullText = reminderText || "";
+    if (includeUpiLink && order.amount && sellerUpiId.trim()) {
+      const upiUrl = `upi://pay?pa=${encodeURIComponent(sellerUpiId.trim())}&pn=OrderSaathi&am=${order.amount}&cu=INR`;
+      fullText += `\n\nPay via UPI: ${upiUrl}`;
+    }
+    const text = encodeURIComponent(fullText);
     return phone ? `https://wa.me/${phone}?text=${text}` : `https://wa.me/?text=${text}`;
   };
 
@@ -166,51 +173,105 @@ export default function DashboardTab({
       </section>
 
       {/* Reminder Popup */}
-      {reminderData && (
-        <section className="card reminder-box-card">
-          <div className="reminder-header">
-            <div className="reminder-title-area">
-              <div className="reminder-badge">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-                </svg>
-                AI WhatsApp Reminder (Hinglish)
+      {reminderData && (() => {
+        const currentOrder = orders.find((o) => o._id === reminderData.orderId) || {};
+        const upiUrl = currentOrder.amount && sellerUpiId.trim()
+          ? `upi://pay?pa=${encodeURIComponent(sellerUpiId.trim())}&pn=OrderSaathi&am=${currentOrder.amount}&cu=INR`
+          : null;
+        const qrImgUrl = upiUrl
+          ? `https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(upiUrl)}`
+          : null;
+
+        return (
+          <section className="card reminder-box-card">
+            <div className="reminder-header">
+              <div className="reminder-title-area">
+                <div className="reminder-badge">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+                  </svg>
+                  AI WhatsApp Reminder (Hinglish)
+                </div>
+                <span className="reminder-order-name">For: <strong>{reminderData.customer_name || "Customer"}</strong> ({reminderData.item})</span>
               </div>
-              <span className="reminder-order-name">For: <strong>{reminderData.customer_name || "Customer"}</strong> ({reminderData.item})</span>
+              <button type="button" className="btn-icon btn-ghost" onClick={onCloseReminder} title="Close">x</button>
             </div>
-            <button type="button" className="btn-icon btn-ghost" onClick={onCloseReminder} title="Close">x</button>
-          </div>
 
-          <div className="whatsapp-bubble">
-            <div className="bubble-text">{reminderData.reminder || reminderData.message}</div>
-            <div className="bubble-time">Just now</div>
-          </div>
+            <div className="whatsapp-bubble">
+              <div className="bubble-text">{reminderData.reminder || reminderData.message}</div>
+              <div className="bubble-time">Just now</div>
+            </div>
 
-          <div className="reminder-actions">
-            <button
-              type="button"
-              className={`btn ${copied ? "btn-success" : "btn-primary"}`}
-              onClick={() => handleCopyReminder(reminderData.reminder || reminderData.message)}
-            >
-              {copied ? "Copied!" : "Copy Message"}
-            </button>
+            {/* UPI Payment QR & Link Generator */}
+            {currentOrder.amount ? (
+              <div className="upi-qr-card">
+                <div className="upi-qr-header">
+                  <span className="upi-title">📱 Dynamic UPI Payment QR Code</span>
+                  <div className="upi-input-inline">
+                    <label style={{ fontSize: '0.8rem', color: '#475569' }}>Seller UPI ID:</label>
+                    <input
+                      type="text"
+                      className="table-input"
+                      style={{ width: '160px', padding: '2px 8px', fontSize: '0.85rem' }}
+                      value={sellerUpiId}
+                      onChange={(e) => setSellerUpiId(e.target.value)}
+                      placeholder="e.g. 9876543210@upi"
+                    />
+                  </div>
+                </div>
+                <div className="upi-qr-content">
+                  {qrImgUrl && (
+                    <div className="qr-image-wrapper">
+                      <img src={qrImgUrl} alt="UPI Payment QR Code" className="qr-image" width="130" height="130" />
+                      <span className="qr-caption">Scan to pay ₹{currentOrder.amount}</span>
+                    </div>
+                  )}
+                  <div className="upi-details-col">
+                    <p style={{ margin: '0 0 6px', fontSize: '0.85rem', color: '#334155' }}>
+                      <strong>Amount Due:</strong> ₹{currentOrder.amount}
+                    </p>
+                    <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#64748b', wordBreak: 'break-all' }}>
+                      UPI URL: <code>{upiUrl}</code>
+                    </p>
+                    <label className="checkbox-label" style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <input
+                        type="checkbox"
+                        checked={includeUpiLink}
+                        onChange={(e) => setIncludeUpiLink(e.target.checked)}
+                      />
+                      <span>Attach UPI payment link to WhatsApp message</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
-            <a
-              href={buildWALink(
-                orders.find((o) => o._id === reminderData.orderId) || {},
-                reminderData.reminder || reminderData.message
-              )}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn btn-whatsapp"
-            >
-              Send on WhatsApp
-            </a>
+            <div className="reminder-actions">
+              <button
+                type="button"
+                className={`btn ${copied ? "btn-success" : "btn-primary"}`}
+                onClick={() => handleCopyReminder((reminderData.reminder || reminderData.message) + (includeUpiLink && upiUrl ? `\n\nPay via UPI: ${upiUrl}` : ''))}
+              >
+                {copied ? "Copied!" : "Copy Message"}
+              </button>
 
-            <button type="button" className="btn btn-ghost" onClick={onCloseReminder}>Dismiss</button>
-          </div>
-        </section>
-      )}
+              <a
+                href={buildWALink(
+                  currentOrder,
+                  reminderData.reminder || reminderData.message
+                )}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-whatsapp"
+              >
+                Send on WhatsApp
+              </a>
+
+              <button type="button" className="btn btn-ghost" onClick={onCloseReminder}>Dismiss</button>
+            </div>
+          </section>
+        );
+      })()}
 
       {/* View toggle */}
       <div className="view-toggle">

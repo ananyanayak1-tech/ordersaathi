@@ -202,24 +202,34 @@ function validateOrders(data) {
  * Calls Gemini Flash model to extract orders from chat text.
  */
 async function callGeminiExtract(ai, chatText, previousError = null) {
-  const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+  const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+  const fallbackModels = [primaryModel, 'gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'];
+  const modelsToTry = [...new Set(fallbackModels)];
 
   let prompt = `WhatsApp Chat Transcript:\n"""\n${chatText}\n"""\n\nExtract all final active orders according to instructions.`;
   if (previousError) {
     prompt += `\n\nATTENTION: Your previous extraction failed code validation with the error:\n"${previousError}"\nPlease fix this mistake and ensure every field is strictly present and adheres to the specified types.`;
   }
 
-  const response = await ai.models.generateContent({
-    model,
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      responseMimeType: 'application/json',
-      responseSchema: extractResponseSchema
+  let lastModelError = null;
+  for (const model of modelsToTry) {
+    try {
+      const response = await ai.models.generateContent({
+        model,
+        contents: prompt,
+        config: {
+          systemInstruction: SYSTEM_INSTRUCTION,
+          responseMimeType: 'application/json',
+          responseSchema: extractResponseSchema
+        }
+      });
+      return typeof response.text === 'function' ? response.text() : response.text;
+    } catch (err) {
+      lastModelError = err;
+      console.warn(`Model ${model} failed during extraction: ${err.message}`);
     }
-  });
-
-  return typeof response.text === 'function' ? response.text() : response.text;
+  }
+  throw lastModelError || new Error('All model attempts failed');
 }
 
 // POST /api/extract
@@ -407,7 +417,8 @@ app.post('/api/reminder', async (req, res) => {
     }
 
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const model = process.env.GEMINI_MODEL || 'gemini-flash-latest';
+    const primaryModel = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
+    const modelsToTry = [...new Set([primaryModel, 'gemini-3.8-flash', 'gemini-flash-lite-latest', 'gemini-flash-latest'])];
 
     const reminderPrompt = `You are a helpful assistant for OrderSaathi, an app for Indian small business owners and shopkeepers.
 Generate a short (1-2 sentences), warm, polite WhatsApp reminder message in simple, natural Hinglish (conversational Hindi written in English letters/Latin alphabet) for a customer regarding their order.
@@ -428,17 +439,22 @@ Instructions:
 - Output ONLY the reminder message text. Do not wrap in quotes or add explanation.`;
 
     let response;
-    for (let attempt = 0; attempt < 2; attempt++) {
+    let lastReminderErr;
+    for (const modelName of modelsToTry) {
       try {
         response = await ai.models.generateContent({
-          model,
+          model: modelName,
           contents: reminderPrompt
         });
-        break;
+        if (response) break;
       } catch (geminiErr) {
-        if (attempt === 1) throw geminiErr;
-        await new Promise((r) => setTimeout(r, 1000));
+        lastReminderErr = geminiErr;
+        console.warn(`Model ${modelName} failed for reminder: ${geminiErr.message}`);
       }
+    }
+
+    if (!response) {
+      throw lastReminderErr || new Error('Failed to generate reminder from all candidate models');
     }
 
     const reminderText = (typeof response.text === 'function' ? response.text() : response.text).trim();
